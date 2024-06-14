@@ -1,6 +1,7 @@
 import random as rd
 from math import exp
 import csv
+import numpy as np
 
 class neuron_f():
     def sigmoid_f(self, x):
@@ -263,21 +264,10 @@ class ml_brain():
         print(model_name+"_param successfully loaded.")            
 
 outp = 1
-inp = 1
+inp = 2
 
 data = []
 out = []
-
-def y_ax_b(a,b):
-    x = rd.random()
-    y = a*x + b
-    return (x, y)
-
-for i in range(100):
-    y_val = y_ax_b(1, 3)
-    data.append([[y_val[0]]])
-    out.append([[y_val[1]]])
-
 
 # xor of two numbers in bit form and output in bit form
 '''for i in range(1000):
@@ -302,19 +292,12 @@ for i in range(100):
                     out[i][0].append(1)
                 else:
                     out[i][0].append(0)
-                res //= 2'''      
+                res //= 2
 
 br = ml_brain("simple", (inp, outp))
 br.instance.add_hidden_layers(1,[1])
-br.NN_train(data, out, 500, 10, samp = 1, msg = "Test", prec = 0.05, testcase = ("Nobin", 10))
-br.print_brain()
-br.get_output([[-3]])
-
-#br.add_kernel((3,2))
-#br.add_kernel(2)
-#br.save_brain()
-
-
+br.NN_train(data, out, 9000, 10, samp = 1, msg = "Test", testcase = ("Nobin", 10))'''
+#br.print_brain()
 
 
 
