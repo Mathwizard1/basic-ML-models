@@ -1,12 +1,12 @@
 import gc
 
 import random as rd
-import pandas as pd
-import matplotlib as mt
+#import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
+#import scipy as sp
 from functools import partial as ft_partial
-import csv
+#import csv
 
 #print("Garbage collection thresholds:", gc.get_threshold())
 
@@ -47,40 +47,48 @@ class loss_numpy_f():
     def D_mean_sqred_errf(self, y_output, y_target):
         return (2 * (y_output - y_target))
 
+    def _log_cosh_errf(self, y_output, y_target):
+        return (np.sum(np.log(np.cosh(y_output - y_target))))
+
+    def D_log_cosh_errf(self, y_output, y_target):
+        return (np.tanh(y_output - y_target))
+
     # Only for measuring loss
     def _rms_errf(self, y_output, y_target):
         return (np.sqrt(self._mean_sqred_errf(y_output, y_target)))
 
-
 #--- gradient descent functions ---#
 class SGD():
-    def _SGD(self, param, D_param):
+    def _SGD(self, param, D_param, args = ()):
         return (param + (-D_param))
 
 class SGD_momentum():
-    beta = 0
-    prev_del_Z = []
+    prev_del_Z = {"W": [], "B": []}
 
-    def __init__(self, beta):
+    def __init__(self, weight_layers, beta = 0.9):
+        self.weight_layers = weight_layers
         self.beta = beta
 
-    def _SGD_momentums(self):
-        pass
+    def _SGD_momentum(self, param, D_param, args):
+        new_D_param = D_param
+        if(len(self.prev_del_Z[args[1]]) == self.weight_layers):
+            temp_param = D_param
+            new_D_param = self.beta * self.prev_del_Z[args[1]][args[0]] + (1 - self.beta) * new_D_param
+            self.prev_del_Z[args[1]][args[0]] = temp_param
+        else:
+            self.prev_del_Z[args[1]].append(D_param) 
+        return(param + (-new_D_param))
 
 class gradient_f():
     del_Z = []
 
-    def __init__(self, grad_func, args = ()):
+    def __init__(self, grad_func, weight_layers):
         self.grad_func = grad_func
-        self.args = args
 
         if(self.grad_func == "_SGD"):
             self.instance = SGD()
         elif(self.grad_func == "_SGD_momentum"):
-            if(len(args) == 1 and isinstance(args[0], float) and args[0] < 1):
-                self.instance = SGD_momentum(*args)
-            else:
-                self.error_exit("1")
+            self.instance = SGD_momentum(weight_layers)
         else:
             self.error_exit("0")
 
@@ -90,7 +98,7 @@ class gradient_f():
         del_W = np.divide(np.outer(self.del_Z[all_layers - layer - 1].T, A0).T, grad_size)
 
         # activate the respective gradient algorithm
-        return (self.instance.__getattribute__(self.grad_func)(Weight, del_W), self.instance.__getattribute__(self.grad_func)(Bias, del_B))
+        return (self.instance.__getattribute__(self.grad_func)(Weight, del_W, (all_layers - layer - 1, "W")), self.instance.__getattribute__(self.grad_func)(Bias, del_B, (all_layers - layer - 1, "B")))
 
     def error_exit(self, exit_num = "-1"):
         if(exit_num == "0"):
@@ -106,27 +114,8 @@ def rd_seed(num):
     rd.seed(num)
     np.random.seed(num)
 
-# simple artificial NN
-class Simple_NN():
-    W = []
-    B = []
-    trained = 0.0
-    alpha = 0.95 # learning rate
-    precision = 0.1 # tells how precise the network will be after trained->  trained *(1 - prec * 100) = actual_accuracy
 
-    # initial setup
-    '''
-    num_input -> number of input nodes
-    num_output -> number of output nodes
-    output_type -> mapping, mathematical, probabilistic
-    '''
-    def __init__(self, num_input, num_output, output_type = "mapping", alpha = 0.95, prec = 0.1):
-        self.num_input = num_input
-        self.num_output = num_output
-        self.output_type = output_type
-        self.alpha = alpha
-        self.precision = prec
-
+class NN_errors():
     # in case of improper inputs
     def ANN_err_exits(self, exit_num = "-1", args = ()):
         if(exit_num == "0"):
@@ -153,6 +142,8 @@ class Simple_NN():
             print("Input/output, Data should be in list or tuple form")
         elif(exit_num == "2b"):
             print("Provide at least 10 data samples")
+        elif(exit_num == "2ba"):
+            print("batch size should be less than input data")
         elif(exit_num == "2c"):
             print("Epoch or batch_size not set correctly")
         elif(exit_num == "2d"):
@@ -162,6 +153,37 @@ class Simple_NN():
         else:
             print("Unknown cause of exit")
         exit()
+
+# simple artificial NN
+class Simple_NN(NN_errors):
+    W = []
+    B = []
+    trained = 0.0
+    alpha = 0.95 # learning rate
+    precision = 0.1 # tells how precise the network will be after trained->  trained = correct/ total * (1 - prec) * 100
+
+    # initial setup
+    '''
+    num_input -> number of input nodes
+    num_output -> number of output nodes
+    output_type -> mapping, mathematical, probabilistic
+    alpha -> alpha between (0, 5)
+    prec -> precision between (0, 1)
+    '''
+    def __init__(self, num_input, num_output, output_type = "mapping", alpha = 0.95, prec = 0.1):
+        if(isinstance(num_input, int) and num_input > 0 and isinstance(num_output, int) and num_output > 0):
+            self.num_input = num_input
+            self.num_output = num_output
+        else:
+            self.ANN_err_exits("0")
+
+        if(isinstance(alpha, (float, int)) and 0 < alpha < 5 and isinstance(prec, float) and 0 < prec < 1):
+            self.alpha = alpha
+            self.precision = prec
+        else:
+            self.ANN_err_exits("0")
+
+        self.output_type = output_type
 
     # to set the activation function(s) for all the neurons
     def set_neuron_actv_f(self, num_hidden, neuron_func):
@@ -258,7 +280,6 @@ class Simple_NN():
                 self.ANN_err_exits("1ca")
         else:
             self.ANN_err_exits("1c")
-        pass
 
     # add layers given num of layer and cells per layer
     def add_hidden_layers(self, num_hidden, num_cells, neuron_func = "_sigmoid_f", loss_func = "_mean_sqred_errf"):
@@ -298,10 +319,11 @@ class Simple_NN():
 
     # for training 
     '''
+    rand_samp = True, for False it works with consecutive batch size data
     samp = ("plot" / "data", samp_num (int))
     msg = "Test"/"Notest" 
     '''
-    def NN_train(self, input_data, output_data, epoch = 1000, batch_size = 10, grad_func = "_SGD", samp = (), msg = "Notest"):
+    def NN_train(self, input_data, output_data, epoch = 1000, batch_size = 10, grad_func = "_SGD", rand_samp = True, samp = "none", msg = "none"):
         if(not(isinstance(input_data, (list, tuple)) or isinstance(output_data, (list, tuple)))):
             self.ANN_err_exits("2a")
         elif(len(input_data) < 10):
@@ -310,10 +332,14 @@ class Simple_NN():
             self.ANN_err_exits("2c")
         
         # prepare the gradient object
-        n_grad_obj = gradient_f(grad_func)
+        n_grad_obj = gradient_f(grad_func, self.num_hidden_layers)
 
         temp_data, temp_out, test_data, test_out = [], [], [], []
         n = round(0.9 * len(input_data))
+
+        # insufficient batch size
+        if(n < batch_size + 1):
+            self.ANN_err_exits("2ba")
 
         temp_data = input_data[:n]
         temp_out = output_data[:n]
@@ -328,30 +354,46 @@ class Simple_NN():
 
         # if sample is asked
         samples, samp_size = [], 0
-        if(isinstance(samp, (tuple, list)) and len(samp) == 2 and isinstance(samp[1], int) and samp[1] >= 1):
-            samp_size = int(epoch / batch_size * samp[1])
+        if(isinstance(samp, str)):
+            samp_size = int(epoch / batch_size) if (epoch > batch_size) else int(batch_size / epoch)
             if(samp_size > 100):
                 samp_size = int(epoch / 100)
-        else:
-            samp_size = 0
 
         # for each epoch train NN using backprop
         for i in range(epoch):
             batch = [] 
-            for d in range(batch_size):
-                t = rd.randint(0, n - 1)
-                batch.append([np.array(temp_data[t], ndmin=2), np.array(temp_out[t], ndmin=2)])
+            if(rand_samp):
+                for d in range(batch_size):
+                    t = rd.randint(0, n - 1)
+                    batch.append([np.array(temp_data[t], ndmin=2), np.array(temp_out[t], ndmin=2)])
+            else: 
+                for d in range(batch_size):
+                    batch.append([np.array(temp_data[epoch % n], ndmin=2), np.array(temp_out[epoch % n], ndmin=2)])
             self.back_prop(batch, batch_size, n_grad_obj)
 
             if(samp_size != 0 and i % samp_size == 0):
                 samples.append(self.n_loss_f(self.feed_front(data_0), target_0))
 
         # For plotting or printing the data of samples
-        if(samp_size != 0 and len(samp) == 2 and isinstance(samp[0], str)):
-            print("Loss function used:", self.n_loss_f.__name__)
-            if(samp[0] == "plot"):
-                pass
-            else:
+        if(samp_size != 0):
+            if(samp == "plot"):
+                # data on x-axis
+                x1 = [(x0 + 1) * samp_size for x0 in range(len(samples))]
+
+                #plot and label
+                plt.plot(x1, samples, color ='blue', label = str(self.n_loss_f.__name__).lstrip("_"))
+                plt.plot(x1, [self.precision] * len(samples), color ='orange' ,label = f"precision: {round(self.precision, 3)}")
+                # naming the x axis
+                plt.xlabel('epochs')
+                # naming the y axis
+                plt.ylabel('Loss')
+
+                # giving a title to my graph
+                plt.title('Loss samples')
+                plt.legend(loc="upper right")
+                plt.show()
+            elif(samp == "data"):
+                print("Loss function used:", self.n_loss_f.__name__)
                 for sample_num in range(len(samples)):
                     print(f"epoch {(sample_num + 1) * samp_size}:",samples[sample_num])
 
@@ -392,7 +434,7 @@ class Simple_NN():
                     Kn = grad_obj.del_Z[layer - 1] @ self.W[self.num_hidden_layers - layer].T
                     Zn = np.multiply(Kn, self.D_actv_f(pre_act_val[self.num_hidden_layers - layer], self.num_hidden_layers - layer - 1))
                     grad_obj.del_Z.append(Zn)
-                    self.W[self.num_hidden_layers - layer], self.B[self.num_hidden_layers - layer] = grad_obj.actv_grad_f(batch_size, self.num_hidden_layers, self.num_hidden_layers - layer, self.W[self.num_hidden_layers - layer], self.B[self.num_hidden_layers - layer], self.actv_f(pre_act_val[self.num_hidden_layers - layer], self.num_hidden_layers - layer - 1))
+                    self.W[self.num_hidden_layers - layer], self.B[self.num_hidden_layers - layer] = grad_obj.actv_grad_f(batch_size / self.alpha, self.num_hidden_layers, self.num_hidden_layers - layer, self.W[self.num_hidden_layers - layer], self.B[self.num_hidden_layers - layer], self.actv_f(pre_act_val[self.num_hidden_layers - layer], self.num_hidden_layers - layer - 1))
 
             # starting layer update (no activation of input)
             self.W[0], self.B[0] = grad_obj.actv_grad_f(batch_size / self.alpha, self.num_hidden_layers, 0, self.W[0], self.B[0], pre_act_val[0])
@@ -416,8 +458,7 @@ class Simple_NN():
 
             if(msg == "Test" and tc < tcase and rd.randint(0,1)):
                 if(self.output_type == "mapping"):
-                    temp_func_holder = neuron_numpy_f()
-                    output_val = temp_func_holder._binary_f(output_val, 2 * self.precision)
+                    output_val = np.round(output_val, decimals= 3)
                 print(f"o/P->{output_val} targ->{test_out[t]}") 
                 tc += 1 
 
@@ -440,7 +481,7 @@ class Simple_NN():
         print()
 
 # Convolutional NN
-class Convolutional_NN(neuron_numpy_f):
+class Convolutional_NN(NN_errors):
     W = []
     B = []
     op_order = []   # to store Kernels and Samplers
@@ -451,9 +492,17 @@ class Convolutional_NN(neuron_numpy_f):
     _feed_layer = False
 
     # initial setup
-    def __init__(self, size_input, size_output, output_type, alpha = 0.95):
+    def __init__(self, size_input, size_output, output_type, alpha = 0.95, prec = 0.1):
         self.size_input = size_input
-        self.alpha = alpha
+        self.size_output = size_output
+
+        if(isinstance(alpha, (float, int)) and 0 < alpha < 5 and isinstance(prec, float) and 0 < prec < 1):
+            self.alpha = alpha
+            self.precision = prec
+        else:
+            self.ANN_err_exits("0")
+
+        self.output_type = output_type
 
     def add_Kernel(self):
         pass
@@ -463,6 +512,33 @@ class Convolutional_NN(neuron_numpy_f):
 
     def set_feed_layer(self):
         self._feed_layer = True
+
+    def add_dense_layers(self):
+        pass
+
+    def set_neuron_actv_f(self):
+        pass
+
+    def set_neuron_loss_f(self):
+        pass
+
+    def uni_actv_f(self):
+        pass
+
+    def feed_front(self):
+        pass
+
+    def NN_train(self):
+        pass
+
+    def back_prop(self):
+        pass
+
+    def NN_test(self):
+        pass
+
+    def print_brain(self):
+        pass
 
 # used to create the type of neural network
 class ml_brain():
@@ -500,15 +576,16 @@ class ml_brain():
             fparam.close()
         print(model_name+"_param successfully loaded.")            
 
-inp = 6
-outp = 3
+inp = 3
+outp = 1
 inp_data = []
 outp_data = []
 
-#seed_num = 100
+# seed 100
+seed_num = 137
 #rd_seed(seed_num)
 
-for i in range(2000):
+'''for i in range(2000):
     inp_data.append([]) # simple NN trains on data in form of 2x2 lists inside a list -> 3d list
     outp_data.append([]) # corresponding outputs should be in -> [[x]] {1x1}  [[1,2],[1,2]] {2x2}  [[1,2]] {1x2}
     num = []
@@ -530,12 +607,45 @@ for i in range(2000):
                     outp_data[i].append(1)
                 else:
                     outp_data[i].append(0)
-                res //= 2
+                res //= 2'''
+
+'''with open("mnist_train.csv", "r") as fp:
+    count = 0
+    rder = csv.reader(fp)
+    for row in rder:
+        outp_data.append([])
+        for p in range(outp):
+            if(p == int(row[0])):
+                outp_data[len(outp_data) - 1].append(1)
+            else:
+                outp_data[len(outp_data) - 1].append(0)
+        inp_data.append([int(x) / 255 for x in row[1:]])
+        count+=1
+        if(count == 100):
+            #break
+            pass
+    fp.close()'''
+
+# checking function regression
+def y_func(args):
+    xval = []
+    x = rd.random()
+    val = 0
+    for v in range(len(args) - 1, -1 , -1):
+        val += args[v] * (x ** v)
+        xval.append(x ** v)
+    return (xval, val)
+
+for i in range(100):
+    y_val = y_func((1, 7, 3))
+    inp_data.append(y_val[0])
+    outp_data.append(y_val[1])
+
 
 def main():
-    br = ml_brain("simple", (inp, outp))
-    br.add_hidden_layers(2, [4,4], "_sigmoid_f")
-    br.NN_train(inp_data, outp_data, 5000, 25, msg = "Test")
-    #br.print_brain()
+    br = ml_brain("simple", (inp, outp, "mathematical"))
+    br.add_hidden_layers(1, [2], "_relu_f", "_mean_sqred_errf")
+    br.NN_train(inp_data, outp_data, 50, 25, "_SGD", samp = "plot")
+    br.print_brain()
 
 main()
