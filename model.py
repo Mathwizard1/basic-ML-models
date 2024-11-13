@@ -636,7 +636,7 @@ def y_func(args):
         xval.append(x ** v)
     return (xval, val)
 
-for i in range(100):
+for i in range(50):
     y_val = y_func((1, 7, 3))
     inp_data.append(y_val[0])
     outp_data.append(y_val[1])
@@ -644,8 +644,8 @@ for i in range(100):
 
 def main():
     br = ml_brain("simple", (inp, outp, "mathematical"))
-    br.add_hidden_layers(1, [2], "_relu_f", "_mean_sqred_errf")
-    br.NN_train(inp_data, outp_data, 50, 25, "_SGD", samp = "plot")
+    br.add_hidden_layers(1, [3], "_relu_f", "_mean_sqred_errf")
+    br.NN_train(inp_data, outp_data, 50, 5, "_SGD", samp = "plot")
     br.print_brain()
 
 main()
